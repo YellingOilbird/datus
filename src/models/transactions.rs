@@ -3,7 +3,8 @@ use crate::db;
 use crate::helpers::db_enums::*;
 use crate::models::ReportConfig;
 use crate::models::utils::*;
-use bigdecimal::BigDecimal;
+use bigdecimal::{BigDecimal, ToPrimitive};
+use chrono::{DateTime, Utc};
 use diesel::Queryable;
 use serde::{Deserialize, Serialize};
 use diesel::prelude::*;
@@ -26,6 +27,12 @@ pub struct Transactions {
     pub total_transactions: u64,
     pub viewed_contracts: Vec<AccountId>,
     pub total_transactions_per_contract: HashMap<AccountId, u64>
+}
+
+#[derive(Serialize, Deserialize, Queryable, AsExpression, Debug)]
+pub struct DailyTransactions {
+    pub daily_transactions: Vec<(DateTime<Utc>, u64)>,
+    pub total_transactions: u64
 }
 
 impl Transactions {
@@ -71,6 +78,54 @@ impl Transactions {
                 total_transactions,
                 viewed_contracts: config.contract_ids.clone(),
                 total_transactions_per_contract,
+            }
+        )
+    }
+}
+
+impl DailyTransactions {
+    pub fn get_transactions(config: ReportConfig) -> Result<Self, ApiError> {
+        info!("Start processing transactions...");
+        let connection = db::connection()?;
+        let (from_timestamp, to_timestamp, limit) = config.unwrap()?;
+        let result = transactions::table
+            .inner_join(action_receipts::table.on(
+                action_receipts::originated_from_transaction_hash.eq(transactions::transaction_hash))
+            )
+            .inner_join(execution_outcomes::table.on(
+                execution_outcomes::receipt_id.eq(transactions::converted_into_receipt_id)
+            ))
+            .limit(limit)
+            .filter(action_receipts::predecessor_account_id.not_like(SYSTEM.to_string()))
+            .filter(execution_outcomes::status.ne(ExecutionOutcomeStatus::Failure))
+            .filter(transactions::signer_account_id.ne_all(config.contract_ids.clone()))
+            .filter(transactions::receiver_account_id.eq_any(config.contract_ids.clone()))
+            .filter(transactions::block_timestamp.ge(from_timestamp))
+            .filter(transactions::block_timestamp.le(to_timestamp))
+            .select(transactions::block_timestamp)
+            .load::<BigDecimal>(&connection);
+        
+        let transactions:Vec<u64> = match result {
+            Ok(v) => {
+                info!("Debug timestamps...{:?} ", v.clone());
+                v.iter()
+                    .map(|x| {
+                        let nanos = x.clone().to_u64().unwrap();
+                        nanos / 10u64.pow(9u32)
+                    })
+                    .collect() 
+            },
+            Err(e) => panic!("ERR_GETTING_TRANSACTIONS:{}", e),
+        };
+
+        info!("Preparing data to views...{:?} ", transactions.clone());
+        
+        let daily_transactions = processed_daily_transactions(transactions.clone());
+
+        Ok(
+            DailyTransactions {
+                daily_transactions,
+                total_transactions: transactions.len() as u64
             }
         )
     }

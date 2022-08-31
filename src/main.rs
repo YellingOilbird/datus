@@ -3,9 +3,10 @@ extern crate log;
 #[macro_use]
 extern crate diesel;
 
+use actix_cors::Cors;
 use actix_web::{App, HttpServer};
 use dotenv::dotenv;
-use std::io;
+use std::{io,env};
 
 mod models;
 mod schema;
@@ -16,12 +17,15 @@ mod db;
 async fn main() -> io::Result<()> {
     dotenv().ok();
     env_logger::init();
+    let host = env::var("HOST").expect("Host not set");
+    let port = env::var("PORT").expect("Port not set");
     info!("Starting server...");
     HttpServer::new(|| {
         App::new()
+            .wrap(Cors::permissive())
             .configure(models::init_routes)
     })
-    .bind("127.0.0.1:5000")?
+    .bind(format!("{}:{}", host, port))?  
     .run()
     .await
 }

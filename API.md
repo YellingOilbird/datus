@@ -17,7 +17,6 @@ pub struct ReportConfig {
 ### API
 
 ```rust
-
 /// Ping-Pong
 #[get("/ping")]
 async fn ping() -> impl Responder {
@@ -53,8 +52,13 @@ async fn get_transactions(params: ReportConfig) -> Result<HttpResponse, ApiError
     let result = Transactions::get_transactions(params);
     Ok(HttpResponse::Ok().json(result))
 }
-
-///FT Deposits to viewed contracts
+/// "total_deposits_per_contract": {
+///     "p3-meta.cheddar.near": {
+///         "token.cheddar.near": 209077706899999997977180864000
+///     }
+/// }
+type FungibleTokenDeposited = HashMap<AccountId, HashMap<AccountId, u128>>;
+/// FT Deposits to viewed contracts
 pub struct FungibleTokenDeposits {
     pub viewed_contracts: Vec<AccountId>,
     // Map of viewed_contract:{token_contract:deposit} for each viewed_contract
@@ -65,6 +69,23 @@ pub struct FungibleTokenDeposits {
 #[post("/totalFTDeposits")]
 async fn get_ft_deposits(params: ReportConfig) -> Result<HttpResponse, ApiError> {
     let result = FungibleTokenDeposits::get_deposits(params)?;
+    Ok(HttpResponse::Ok().json(result))
+}
+/// daily_transactions : [(date, number)...(date, number)]
+/// "daily_transactions": {
+///     "p3-meta.cheddar.near": {
+///         "token.cheddar.near": 209077706899999997977180864000
+///     }
+/// }
+#[derive(Serialize, Deserialize, Queryable, AsExpression, Debug)]
+pub struct DailyTransactions {
+    pub daily_transactions: Vec<(DateTime<Utc>, u64)>,
+    pub total_transactions: u64
+}
+/// POST::dailyTransactions
+#[post("/dailyTransactions")]
+async fn get_daily_transactions(params: web::Json<ReportConfig>) -> Result<HttpResponse, ApiError> {
+    let result = DailyTransactions::get_transactions(params.into_inner())?;
     Ok(HttpResponse::Ok().json(result))
 }
 

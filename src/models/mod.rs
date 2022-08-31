@@ -15,6 +15,7 @@ pub use interactions::AccountsInteracted;
 ///Transactions 
 pub use transactions::Transactions;
 pub use transactions::Transaction;
+pub use transactions::DailyTransactions;
 ///Token deposits 
 pub use ft_deposits::ArgsReceivers;
 pub use ft_deposits::FungibleTokenDeposits;

@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 actix-web = "4.1.0"
+actix-cors = "0.6.2"
 actix-rt = "2.7.0"
 bigdecimal = "=0.1.0"
 borsh = "0.7.1"

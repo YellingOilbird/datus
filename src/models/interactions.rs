@@ -13,7 +13,7 @@ use diesel::prelude::*;
 pub struct AccountsInteracted {
     pub total_interacted_accounts: u64,
     pub viewed_contracts: Vec<AccountId>,
-    pub interacted_accounts: Vec<AccountId>
+    pub interacted_accounts: Vec<(AccountId, u64)>
 }
 
 impl AccountsInteracted {
@@ -34,19 +34,34 @@ impl AccountsInteracted {
 
         // report accounts
         // unique interacted with required contracts user accounts
-        let interacted_accounts:Vec<AccountId> = filtered
+        let mut interacted_accounts:Vec<AccountId> = filtered
             .limit(limit)       
             .select(predecessor_account_id)
-            .distinct()
             .order_by(predecessor_account_id.desc())
             .load::<AccountId>(&connection)?;
+        
+        let mut accounts_map:Vec<(AccountId, u64)> = interacted_accounts
+            .iter()
+            .map(
+                |account| 
+                count_account_entries(
+                    interacted_accounts.clone(), 
+                    account
+                )
+            )
+            .collect();
+        interacted_accounts.dedup();
+
+        accounts_map.sort_by(|acc1, acc2| acc2.1.cmp(&acc1.1));
+        accounts_map.drain(5..);
+
         let total_interacted_accounts = interacted_accounts.len() as u64;
         info!("Total interacted with contracts {:?} users: {:?} ", config.contract_ids.clone(), total_interacted_accounts);
 
         Ok(AccountsInteracted {
             total_interacted_accounts,
             viewed_contracts: config.contract_ids.clone(),
-            interacted_accounts
+            interacted_accounts: accounts_map
         })
     }
 }
